@@ -23,5 +23,9 @@ struct MainTabView: View {
                     Label("Settings", systemImage: "gearshape")
                 }
         }
+        .toolbarBackground(AppTheme.tabBar, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
+        .toolbarColorScheme(.dark, for: .tabBar)
+        .tint(AppTheme.tabSelected)
     }
 }

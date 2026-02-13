@@ -43,6 +43,7 @@ struct OnboardingView: View {
                 }
             }
             .navigationTitle("Welcome")
+            .freezerScreenStyle()
             .onAppear {
                 setupDefaults()
             }

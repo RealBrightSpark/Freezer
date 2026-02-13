@@ -4,6 +4,8 @@ struct SettingsView: View {
     @EnvironmentObject private var store: FreezerStore
 
     @State private var editableDrawers: [FreezerDrawer] = []
+    @State private var editableCategories: [FreezerCategory] = []
+    @State private var newCategoryName = ""
 
     @State private var newKeyword = ""
     @State private var newMappingCategoryID: UUID?
@@ -22,12 +24,45 @@ struct SettingsView: View {
                     )
                 }
 
+                Section("Categories") {
+                    ForEach(editableCategories.indices, id: \.self) { index in
+                        HStack {
+                            TextField("Category name", text: Binding(
+                                get: { editableCategories[index].name },
+                                set: { editableCategories[index].name = $0 }
+                            ))
+                            if editableCategories.count > 1 {
+                                Button(role: .destructive) {
+                                    deleteCategory(editableCategories[index].id)
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                            }
+                        }
+                    }
+
+                    HStack {
+                        TextField("Add category", text: $newCategoryName)
+                        Button("Add") {
+                            store.addCategory(name: newCategoryName)
+                            newCategoryName = ""
+                            reloadState()
+                        }
+                        .disabled(newCategoryName.freezerNormalized.isEmpty)
+                    }
+
+                    Button("Save categories") {
+                        store.updateCategories(editableCategories)
+                        reloadState()
+                    }
+                }
+
                 Section("Drawers") {
                     ForEach($editableDrawers) { $drawer in
                         VStack(alignment: .leading, spacing: 8) {
                             TextField("Drawer name", text: $drawer.name)
                             Picker("Default category", selection: $drawer.defaultCategoryID) {
-                                ForEach(store.categories) { category in
+                                ForEach(editableCategories) { category in
                                     Text(category.name).tag(category.id)
                                 }
                             }
@@ -44,16 +79,16 @@ struct SettingsView: View {
                     TextField("Keyword (e.g. spag bol)", text: $newKeyword)
 
                     Picker("Category", selection: Binding(
-                        get: { newMappingCategoryID ?? store.categories.first?.id },
+                        get: { newMappingCategoryID ?? editableCategories.first?.id },
                         set: { newMappingCategoryID = $0 }
                     )) {
-                        ForEach(store.categories) { category in
+                        ForEach(editableCategories) { category in
                             Text(category.name).tag(Optional(category.id))
                         }
                     }
 
                     Button("Add mapping") {
-                        if let categoryID = newMappingCategoryID ?? store.categories.first?.id {
+                        if let categoryID = newMappingCategoryID ?? editableCategories.first?.id {
                             store.addUserMapping(keyword: newKeyword, categoryID: categoryID)
                             newKeyword = ""
                         }
@@ -68,9 +103,7 @@ struct SettingsView: View {
                             HStack {
                                 VStack(alignment: .leading) {
                                     Text(mapping.keyword)
-                                    Text(store.categoryName(for: mapping.categoryID))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                    CategoryBadge(text: store.categoryName(for: mapping.categoryID))
                                 }
                                 Spacer()
                                 Button(role: .destructive) {
@@ -84,10 +117,27 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .freezerScreenStyle()
             .onAppear {
-                editableDrawers = store.drawers
-                newMappingCategoryID = store.categories.first?.id
+                reloadState()
             }
+        }
+    }
+
+    private func deleteCategory(_ id: UUID) {
+        store.deleteCategory(id: id)
+        reloadState()
+    }
+
+    private func reloadState() {
+        editableCategories = store.categories
+        editableDrawers = store.drawers
+
+        let validCategoryIDs = Set(editableCategories.map(\.id))
+        if let selected = newMappingCategoryID, !validCategoryIDs.contains(selected) {
+            newMappingCategoryID = editableCategories.first?.id
+        } else if newMappingCategoryID == nil {
+            newMappingCategoryID = editableCategories.first?.id
         }
     }
 }

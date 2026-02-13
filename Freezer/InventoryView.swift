@@ -17,22 +17,26 @@ struct InventoryView: View {
                 ForEach(store.drawers) { drawer in
                     let drawerItems = visibleItems.filter { $0.drawerID == drawer.id }
                     if !drawerItems.isEmpty {
-                        Section(drawer.name) {
+                        Section {
                             ForEach(drawerItems) { item in
                                 Button {
                                     selectedItem = item
                                 } label: {
                                     HStack {
-                                        VStack(alignment: .leading) {
+                                        VStack(alignment: .leading, spacing: 6) {
                                             Text(item.name)
-                                            Text("\(store.categoryName(for: item.categoryID)) • \(item.quantity.isEmpty ? "No quantity" : item.quantity)")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
+                                                .foregroundStyle(AppTheme.itemText)
+                                            HStack(spacing: 8) {
+                                                CategoryBadge(text: store.categoryName(for: item.categoryID))
+                                                Text(item.quantity.isEmpty ? "No quantity" : item.quantity)
+                                                    .font(.caption)
+                                                    .foregroundStyle(AppTheme.itemText)
+                                            }
                                         }
                                         Spacer()
                                         Text(item.dateAdded, style: .date)
                                             .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(AppTheme.itemText)
                                     }
                                 }
                                 .swipeActions {
@@ -43,6 +47,9 @@ struct InventoryView: View {
                                     }
                                 }
                             }
+                        } header: {
+                            Text(drawer.name)
+                                .foregroundStyle(.white)
                         }
                     }
                 }
@@ -56,6 +63,7 @@ struct InventoryView: View {
                 }
             }
             .navigationTitle("Inventory")
+            .freezerScreenStyle()
             .sheet(item: $selectedItem) { item in
                 ItemEditorView(item: item)
                     .environmentObject(store)

@@ -29,24 +29,33 @@ struct QueryView: View {
                             HStack(alignment: .top) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(item.name)
-                                    Text("\(item.quantity.isEmpty ? "No quantity" : item.quantity) • \(store.categoryName(for: item.categoryID)) • \(store.drawerName(for: item.drawerID))")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(AppTheme.itemText)
+                                    HStack(spacing: 8) {
+                                        CategoryBadge(text: store.categoryName(for: item.categoryID))
+                                        Text(item.quantity.isEmpty ? "No quantity" : item.quantity)
+                                            .font(.caption)
+                                            .foregroundStyle(AppTheme.itemText)
+                                        Text(store.drawerName(for: item.drawerID))
+                                            .font(.caption)
+                                            .foregroundStyle(AppTheme.itemText)
+                                    }
                                     Text("Added \(item.dateAdded.formatted(date: .abbreviated, time: .omitted))")
                                         .font(.caption2)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(AppTheme.itemText)
                                 }
                                 Spacer()
                                 Button("Remove", role: .destructive) {
                                     pendingDeleteItemID = item.id
                                 }
                                 .buttonStyle(.bordered)
+                                .foregroundStyle(AppTheme.itemText)
                             }
                         }
                     }
                 }
             }
             .navigationTitle("Query")
+            .freezerScreenStyle()
             .alert("Remove item?", isPresented: Binding(
                 get: { pendingDeleteItemID != nil },
                 set: { isPresented in

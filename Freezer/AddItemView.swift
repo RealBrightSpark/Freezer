@@ -70,6 +70,7 @@ struct AddItemView: View {
                 }
             }
             .navigationTitle("Add item")
+            .freezerScreenStyle()
             .onAppear {
                 bootstrapSelections()
             }

@@ -123,6 +123,77 @@ final class FreezerStore: ObservableObject {
         save()
     }
 
+    func addCategory(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard !data.categories.contains(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
+
+        data.categories.append(FreezerCategory(id: UUID(), name: trimmed))
+        save()
+    }
+
+    func updateCategories(_ categories: [FreezerCategory]) {
+        let cleaned = categories
+            .map {
+                FreezerCategory(
+                    id: $0.id,
+                    name: $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            }
+            .filter { !$0.name.isEmpty }
+
+        guard !cleaned.isEmpty else { return }
+
+        var unique: [FreezerCategory] = []
+        for category in cleaned {
+            if !unique.contains(where: { $0.name.caseInsensitiveCompare(category.name) == .orderedSame }) {
+                unique.append(category)
+            }
+        }
+
+        guard !unique.isEmpty else { return }
+        data.categories = unique
+
+        let validCategoryIDs = Set(unique.map(\.id))
+        let fallbackCategoryID = unique[0].id
+
+        for index in data.drawers.indices where !validCategoryIDs.contains(data.drawers[index].defaultCategoryID) {
+            data.drawers[index].defaultCategoryID = fallbackCategoryID
+        }
+
+        for index in data.items.indices where !validCategoryIDs.contains(data.items[index].categoryID) {
+            data.items[index].categoryID = fallbackCategoryID
+        }
+
+        for index in data.userMappings.indices where !validCategoryIDs.contains(data.userMappings[index].categoryID) {
+            data.userMappings[index].categoryID = fallbackCategoryID
+        }
+
+        save()
+    }
+
+    func deleteCategory(id: UUID) {
+        guard data.categories.count > 1 else { return }
+        guard data.categories.contains(where: { $0.id == id }) else { return }
+        guard let fallbackCategory = data.categories.first(where: { $0.id != id }) else { return }
+
+        data.categories.removeAll { $0.id == id }
+
+        for index in data.drawers.indices where data.drawers[index].defaultCategoryID == id {
+            data.drawers[index].defaultCategoryID = fallbackCategory.id
+        }
+
+        for index in data.items.indices where data.items[index].categoryID == id {
+            data.items[index].categoryID = fallbackCategory.id
+        }
+
+        for index in data.userMappings.indices where data.userMappings[index].categoryID == id {
+            data.userMappings[index].categoryID = fallbackCategory.id
+        }
+
+        save()
+    }
+
     func updateUserMapping(_ mapping: FoodMapping) {
         guard let index = data.userMappings.firstIndex(where: { $0.id == mapping.id }) else { return }
         data.userMappings[index] = mapping

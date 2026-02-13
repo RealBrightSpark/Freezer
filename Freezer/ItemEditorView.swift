@@ -34,6 +34,7 @@ struct ItemEditorView: View {
                 }
             }
             .navigationTitle("Edit item")
+            .freezerScreenStyle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
