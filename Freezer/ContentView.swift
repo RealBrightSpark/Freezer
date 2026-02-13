@@ -1,24 +1,13 @@
-//
-//  ContentView.swift
-//  Freezer
-//
-//  Created by Dave Bowles on 13/02/2026.
-//
-
 import SwiftUI
 
-struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
-    }
-}
+struct RootView: View {
+    @EnvironmentObject private var store: FreezerStore
 
-#Preview {
-    ContentView()
+    var body: some View {
+        if store.onboardingComplete {
+            MainTabView()
+        } else {
+            OnboardingView()
+        }
+    }
 }
