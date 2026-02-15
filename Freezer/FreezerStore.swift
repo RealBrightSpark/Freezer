@@ -46,6 +46,12 @@ final class FreezerStore: ObservableObject {
         data.settings.thresholdMonths
     }
 
+    enum ItemExpiryState {
+        case normal
+        case expiringSoon
+        case expired
+    }
+
     func completeOnboarding(drawers: [DrawerDraft], thresholdMonths: Int) {
         data.drawers = drawers.enumerated().map { offset, draft in
             FreezerDrawer(
@@ -255,6 +261,23 @@ final class FreezerStore: ObservableObject {
         }
 
         return items.filter { $0.dateAdded < cutoff }
+    }
+
+    func expiryState(for item: FreezerItem, referenceDate: Date = Date()) -> ItemExpiryState {
+        guard let expiryDate = Calendar.current.date(byAdding: .month, value: thresholdMonths, to: item.dateAdded),
+              let warningStart = Calendar.current.date(byAdding: .month, value: -1, to: expiryDate) else {
+            return .normal
+        }
+
+        if referenceDate >= expiryDate {
+            return .expired
+        }
+
+        if referenceDate >= warningStart {
+            return .expiringSoon
+        }
+
+        return .normal
     }
 
     func requestNotificationPermission() async {

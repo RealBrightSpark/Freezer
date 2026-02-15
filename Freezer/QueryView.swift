@@ -50,6 +50,7 @@ struct QueryView: View {
                                 .buttonStyle(.bordered)
                                 .foregroundStyle(AppTheme.itemText)
                             }
+                            .listRowBackground(store.expiryState(for: item).rowColor)
                         }
                     }
                 }

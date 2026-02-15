@@ -46,6 +46,7 @@ struct InventoryView: View {
                                         Label("Delete", systemImage: "trash")
                                     }
                                 }
+                                .listRowBackground(store.expiryState(for: item).rowColor)
                             }
                         } header: {
                             Text(drawer.name)

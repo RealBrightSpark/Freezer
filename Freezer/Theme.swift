@@ -17,6 +17,8 @@ enum AppTheme {
     )
 
     static let rowSurface = Color.white.opacity(0.96)
+    static let expiringRow = Color(red: 1.0, green: 0.94, blue: 0.55)
+    static let expiredRow = Color(red: 1.0, green: 0.42, blue: 0.42)
 
     static func categoryColor(for name: String) -> Color {
         switch name.freezerNormalized {
@@ -41,6 +43,19 @@ enum AppTheme {
             case 4: return Color(red: 0.86, green: 0.63, blue: 0.20)
             default: return Color(red: 0.72, green: 0.32, blue: 0.64)
             }
+        }
+    }
+}
+
+extension FreezerStore.ItemExpiryState {
+    var rowColor: Color {
+        switch self {
+        case .normal:
+            return AppTheme.rowSurface
+        case .expiringSoon:
+            return AppTheme.expiringRow
+        case .expired:
+            return AppTheme.expiredRow
         }
     }
 }
