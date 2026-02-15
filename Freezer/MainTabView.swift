@@ -15,7 +15,7 @@ struct MainTabView: View {
 
             QueryView()
                 .tabItem {
-                    Label("Query", systemImage: "magnifyingglass")
+                    Label("Search", systemImage: "magnifyingglass")
                 }
 
             SettingsView()

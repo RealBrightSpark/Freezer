@@ -55,7 +55,7 @@ struct QueryView: View {
                     }
                 }
             }
-            .navigationTitle("Query")
+            .navigationTitle("Search")
             .freezerScreenStyle()
             .alert("Remove item?", isPresented: Binding(
                 get: { pendingDeleteItemID != nil },
