@@ -40,10 +40,12 @@ struct InventoryView: View {
                                     }
                                 }
                                 .swipeActions {
-                                    Button(role: .destructive) {
-                                        store.deleteItem(id: item.id)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
+                                    if store.canCurrentUserEditContent {
+                                        Button(role: .destructive) {
+                                            store.deleteItem(id: item.id)
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
                                     }
                                 }
                                 .listRowBackground(store.expiryState(for: item).rowColor)

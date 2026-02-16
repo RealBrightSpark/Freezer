@@ -16,6 +16,7 @@ final class FreezerStore: ObservableObject {
 
         if let loaded = Self.loadFromDisk(url: saveURL) {
             self.data = loaded
+            migrateMultiUserDefaultsIfNeeded()
         } else {
             self.data = FreezerData.initial()
             save()
@@ -46,13 +47,128 @@ final class FreezerStore: ObservableObject {
         data.settings.thresholdMonths
     }
 
+    var householdName: String {
+        data.household.name
+    }
+
+    var users: [AppUser] {
+        data.users.sorted { $0.displayName < $1.displayName }
+    }
+
+    var currentUser: AppUser {
+        data.users.first(where: { $0.id == data.currentUserID }) ?? data.users[0]
+    }
+
+    var members: [HouseholdMember] {
+        data.household.members
+            .sorted { lhs, rhs in
+                if lhs.role == rhs.role {
+                    return userName(for: lhs.userID) < userName(for: rhs.userID)
+                }
+                return roleRank(lhs.role) < roleRank(rhs.role)
+            }
+    }
+
+    var canCurrentUserEditContent: Bool {
+        switch currentRole {
+        case .owner, .editor:
+            return true
+        case .viewer:
+            return false
+        }
+    }
+
+    var canCurrentUserManageMembers: Bool {
+        currentRole == .owner
+    }
+
     enum ItemExpiryState {
         case normal
         case expiringSoon
         case expired
     }
 
+    private var currentRole: HouseholdRole {
+        data.household.members.first(where: { $0.userID == data.currentUserID })?.role ?? .viewer
+    }
+
+    func userName(for userID: UUID) -> String {
+        data.users.first(where: { $0.id == userID })?.displayName ?? "Unknown"
+    }
+
+    func switchCurrentUser(to userID: UUID) {
+        guard data.users.contains(where: { $0.id == userID }) else { return }
+        data.currentUserID = userID
+        save()
+    }
+
+    func renameCurrentUser(_ displayName: String) {
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard let index = data.users.firstIndex(where: { $0.id == data.currentUserID }) else { return }
+        data.users[index].displayName = trimmed
+        save()
+    }
+
+    func renameHousehold(_ name: String) {
+        guard canCurrentUserManageMembers else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        data.household.name = trimmed
+        save()
+    }
+
+    func addMember(displayName: String, role: HouseholdRole) {
+        guard canCurrentUserManageMembers else { return }
+
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard !data.users.contains(where: { $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
+
+        let user = AppUser(id: UUID(), displayName: trimmed)
+        let member = HouseholdMember(id: UUID(), userID: user.id, role: role, joinedAt: Date())
+        data.users.append(user)
+        data.household.members.append(member)
+        save()
+    }
+
+    func updateMemberRole(memberID: UUID, role: HouseholdRole) {
+        guard canCurrentUserManageMembers else { return }
+        guard let index = data.household.members.firstIndex(where: { $0.id == memberID }) else { return }
+
+        let member = data.household.members[index]
+        if member.userID == data.currentUserID && role != .owner {
+            return
+        }
+
+        data.household.members[index].role = role
+        ensureAtLeastOneOwner()
+        save()
+    }
+
+    func removeMember(memberID: UUID) {
+        guard canCurrentUserManageMembers else { return }
+        guard let index = data.household.members.firstIndex(where: { $0.id == memberID }) else { return }
+
+        let member = data.household.members[index]
+        if member.userID == data.currentUserID {
+            return
+        }
+
+        data.household.members.remove(at: index)
+
+        let stillReferenced = data.household.members.contains(where: { $0.userID == member.userID })
+        if !stillReferenced {
+            data.users.removeAll { $0.id == member.userID }
+        }
+
+        ensureAtLeastOneOwner()
+        save()
+    }
+
     func completeOnboarding(drawers: [DrawerDraft], thresholdMonths: Int) {
+        guard canCurrentUserEditContent else { return }
+
         data.drawers = drawers.enumerated().map { offset, draft in
             FreezerDrawer(
                 id: UUID(),
@@ -67,6 +183,7 @@ final class FreezerStore: ObservableObject {
     }
 
     func addItem(name: String, quantity: String, dateAdded: Date, categoryID: UUID?, drawerID: UUID?) {
+        guard canCurrentUserEditContent else { return }
         guard !name.freezerNormalized.isEmpty else { return }
 
         let fallbackCategory = categoryID ?? suggestedCategory(for: name)?.id ?? categories.first?.id
@@ -75,6 +192,7 @@ final class FreezerStore: ObservableObject {
         let fallbackDrawer = drawerID ?? suggestedDrawer(for: chosenCategoryID)?.id ?? drawers.first?.id
         guard let chosenDrawerID = fallbackDrawer else { return }
 
+        let now = Date()
         let item = FreezerItem(
             id: UUID(),
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -82,7 +200,10 @@ final class FreezerStore: ObservableObject {
             categoryID: chosenCategoryID,
             drawerID: chosenDrawerID,
             quantity: quantity.trimmingCharacters(in: .whitespacesAndNewlines),
-            dateAdded: dateAdded
+            dateAdded: dateAdded,
+            createdByUserID: data.currentUserID,
+            updatedByUserID: data.currentUserID,
+            updatedAt: now
         )
 
         data.items.append(item)
@@ -90,24 +211,32 @@ final class FreezerStore: ObservableObject {
     }
 
     func updateItem(_ item: FreezerItem) {
+        guard canCurrentUserEditContent else { return }
         guard let index = data.items.firstIndex(where: { $0.id == item.id }) else { return }
+
         var updated = item
         updated.normalizedName = item.name.freezerNormalized
+        updated.updatedByUserID = data.currentUserID
+        updated.updatedAt = Date()
         data.items[index] = updated
         saveAndRefreshNotifications()
     }
 
     func deleteItem(id: UUID) {
+        guard canCurrentUserEditContent else { return }
         data.items.removeAll { $0.id == id }
         saveAndRefreshNotifications()
     }
 
     func setThresholdMonths(_ months: Int) {
+        guard canCurrentUserEditContent else { return }
         data.settings.thresholdMonths = max(1, months)
         saveAndRefreshNotifications()
     }
 
     func updateDrawers(_ updatedDrawers: [FreezerDrawer]) {
+        guard canCurrentUserEditContent else { return }
+
         data.drawers = updatedDrawers.enumerated().map { index, drawer in
             var copy = drawer
             copy.order = index
@@ -117,6 +246,8 @@ final class FreezerStore: ObservableObject {
     }
 
     func addUserMapping(keyword: String, categoryID: UUID) {
+        guard canCurrentUserEditContent else { return }
+
         let normalized = keyword.freezerNormalized
         guard !normalized.isEmpty else { return }
 
@@ -130,6 +261,8 @@ final class FreezerStore: ObservableObject {
     }
 
     func addCategory(name: String) {
+        guard canCurrentUserEditContent else { return }
+
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         guard !data.categories.contains(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
@@ -139,6 +272,8 @@ final class FreezerStore: ObservableObject {
     }
 
     func updateCategories(_ categories: [FreezerCategory]) {
+        guard canCurrentUserEditContent else { return }
+
         let cleaned = categories
             .map {
                 FreezerCategory(
@@ -179,6 +314,7 @@ final class FreezerStore: ObservableObject {
     }
 
     func deleteCategory(id: UUID) {
+        guard canCurrentUserEditContent else { return }
         guard data.categories.count > 1 else { return }
         guard data.categories.contains(where: { $0.id == id }) else { return }
         guard let fallbackCategory = data.categories.first(where: { $0.id != id }) else { return }
@@ -201,12 +337,14 @@ final class FreezerStore: ObservableObject {
     }
 
     func updateUserMapping(_ mapping: FoodMapping) {
+        guard canCurrentUserEditContent else { return }
         guard let index = data.userMappings.firstIndex(where: { $0.id == mapping.id }) else { return }
         data.userMappings[index] = mapping
         save()
     }
 
     func deleteMapping(id: UUID) {
+        guard canCurrentUserEditContent else { return }
         data.userMappings.removeAll { $0.id == id }
         save()
     }
@@ -240,8 +378,32 @@ final class FreezerStore: ObservableObject {
         data.drawers.first(where: { $0.id == id })?.name ?? "Unknown"
     }
 
+    func drawerNumber(for id: UUID) -> Int? {
+        guard let order = data.drawers.first(where: { $0.id == id })?.order else {
+            return nil
+        }
+        return order + 1
+    }
+
     func items(for drawerID: UUID) -> [FreezerItem] {
         items.filter { $0.drawerID == drawerID }
+    }
+
+    func voiceRemovalMatches(itemTerm: String, drawerNumber requestedDrawerNumber: Int?) -> [FreezerItem] {
+        let normalized = itemTerm.freezerNormalized
+        guard !normalized.isEmpty else { return [] }
+
+        var matches = items.filter { item in
+            item.normalizedName == normalized ||
+            item.normalizedName.contains(normalized) ||
+            normalized.contains(item.normalizedName)
+        }
+
+        if let requestedDrawerNumber {
+            matches = matches.filter { drawerNumber(for: $0.drawerID) == requestedDrawerNumber }
+        }
+
+        return matches.sorted { $0.dateAdded < $1.dateAdded }
     }
 
     func matchingItems(term: String) -> [FreezerItem] {
@@ -324,6 +486,61 @@ final class FreezerStore: ObservableObject {
         } catch {
             print("Failed to save freezer data: \(error)")
         }
+    }
+
+    private func roleRank(_ role: HouseholdRole) -> Int {
+        switch role {
+        case .owner: return 0
+        case .editor: return 1
+        case .viewer: return 2
+        }
+    }
+
+    private func ensureAtLeastOneOwner() {
+        if data.household.members.contains(where: { $0.role == .owner }) {
+            return
+        }
+
+        if let firstIndex = data.household.members.indices.first {
+            data.household.members[firstIndex].role = .owner
+        }
+    }
+
+    private func migrateMultiUserDefaultsIfNeeded() {
+        if data.users.isEmpty {
+            let user = AppUser(id: UUID(), displayName: "You")
+            data.users = [user]
+            data.currentUserID = user.id
+        }
+
+        if !data.users.contains(where: { $0.id == data.currentUserID }) {
+            data.currentUserID = data.users[0].id
+        }
+
+        if data.household.members.isEmpty {
+            data.household.members = [
+                HouseholdMember(id: UUID(), userID: data.currentUserID, role: .owner, joinedAt: Date())
+            ]
+        }
+
+        if !data.household.members.contains(where: { $0.userID == data.currentUserID }) {
+            data.household.members.append(
+                HouseholdMember(id: UUID(), userID: data.currentUserID, role: .owner, joinedAt: Date())
+            )
+        }
+
+        ensureAtLeastOneOwner()
+
+        for index in data.items.indices {
+            if !data.users.contains(where: { $0.id == data.items[index].createdByUserID }) {
+                data.items[index].createdByUserID = data.currentUserID
+            }
+            if !data.users.contains(where: { $0.id == data.items[index].updatedByUserID }) {
+                data.items[index].updatedByUserID = data.currentUserID
+            }
+        }
+
+        save()
     }
 }
 

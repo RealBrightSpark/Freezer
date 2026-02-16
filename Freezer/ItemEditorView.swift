@@ -18,6 +18,7 @@ struct ItemEditorView: View {
                     TextField("Quantity", text: $item.quantity)
                     DatePicker("Date added", selection: $item.dateAdded, displayedComponents: .date)
                 }
+                .disabled(!store.canCurrentUserEditContent)
 
                 Section("Placement") {
                     Picker("Category", selection: $item.categoryID) {
@@ -32,6 +33,7 @@ struct ItemEditorView: View {
                         }
                     }
                 }
+                .disabled(!store.canCurrentUserEditContent)
             }
             .navigationTitle("Edit item")
             .freezerScreenStyle()
@@ -41,6 +43,7 @@ struct ItemEditorView: View {
                         store.updateItem(item)
                         dismiss()
                     }
+                    .disabled(!store.canCurrentUserEditContent)
                 }
 
                 ToolbarItem(placement: .cancellationAction) {

@@ -25,6 +25,7 @@ struct AddItemView: View {
 
                     DatePicker("Date added", selection: $dateAdded, displayedComponents: .date)
                 }
+                .disabled(!store.canCurrentUserEditContent)
 
                 Section("Auto assignment") {
                     Picker("Category", selection: Binding(
@@ -54,6 +55,7 @@ struct AddItemView: View {
                         }
                     }
                 }
+                .disabled(!store.canCurrentUserEditContent)
 
                 Section {
                     Button("Add to freezer") {
@@ -66,7 +68,7 @@ struct AddItemView: View {
                         )
                         resetForm()
                     }
-                    .disabled(name.freezerNormalized.isEmpty || store.drawers.isEmpty)
+                    .disabled(name.freezerNormalized.isEmpty || store.drawers.isEmpty || !store.canCurrentUserEditContent)
                 }
             }
             .navigationTitle("Add item")

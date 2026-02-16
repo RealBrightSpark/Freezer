@@ -10,9 +10,97 @@ struct SettingsView: View {
     @State private var newKeyword = ""
     @State private var newMappingCategoryID: UUID?
 
+    @State private var householdName = ""
+    @State private var selectedCurrentUserID: UUID?
+    @State private var newMemberName = ""
+    @State private var newMemberRole: HouseholdRole = .editor
+
     var body: some View {
         NavigationStack {
             Form {
+                Section("Collaboration") {
+                    TextField("Household name", text: $householdName)
+                        .disabled(!store.canCurrentUserManageMembers)
+
+                    Button("Save household name") {
+                        store.renameHousehold(householdName)
+                        reloadState()
+                    }
+                    .disabled(!store.canCurrentUserManageMembers || householdName.freezerNormalized.isEmpty)
+
+                    Picker("Current user", selection: Binding(
+                        get: { selectedCurrentUserID ?? store.currentUser.id },
+                        set: { newID in
+                            selectedCurrentUserID = newID
+                            store.switchCurrentUser(to: newID)
+                            reloadState()
+                        }
+                    )) {
+                        ForEach(store.users) { user in
+                            Text(user.displayName).tag(user.id)
+                        }
+                    }
+
+                    Text("Current role: \(store.members.first(where: { $0.userID == store.currentUser.id })?.role.label ?? "Viewer")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    HStack {
+                        TextField("Add member name", text: $newMemberName)
+                        Picker("Role", selection: $newMemberRole) {
+                            ForEach(HouseholdRole.allCases) { role in
+                                Text(role.label).tag(role)
+                            }
+                        }
+                        .labelsHidden()
+                    }
+                    .disabled(!store.canCurrentUserManageMembers)
+
+                    Button("Add member") {
+                        store.addMember(displayName: newMemberName, role: newMemberRole)
+                        newMemberName = ""
+                        newMemberRole = .editor
+                        reloadState()
+                    }
+                    .disabled(!store.canCurrentUserManageMembers || newMemberName.freezerNormalized.isEmpty)
+
+                    ForEach(store.members) { member in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(store.userName(for: member.userID))
+                                Text(member.role.label)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            if store.canCurrentUserManageMembers {
+                                Picker("Role", selection: Binding(
+                                    get: { member.role },
+                                    set: { newRole in
+                                        store.updateMemberRole(memberID: member.id, role: newRole)
+                                        reloadState()
+                                    }
+                                )) {
+                                    ForEach(HouseholdRole.allCases) { role in
+                                        Text(role.label).tag(role)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(maxWidth: 140)
+
+                                Button(role: .destructive) {
+                                    store.removeMember(memberID: member.id)
+                                    reloadState()
+                                } label: {
+                                    Image(systemName: "person.crop.circle.badge.minus")
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Section("Freezer age threshold") {
                     Stepper(
                         "\(store.thresholdMonths) month\(store.thresholdMonths == 1 ? "" : "s")",
@@ -23,6 +111,7 @@ struct SettingsView: View {
                         in: 1...24
                     )
                 }
+                .disabled(!store.canCurrentUserEditContent)
 
                 Section("Categories") {
                     ForEach(editableCategories.indices, id: \.self) { index in
@@ -56,6 +145,7 @@ struct SettingsView: View {
                         reloadState()
                     }
                 }
+                .disabled(!store.canCurrentUserEditContent)
 
                 Section("Drawers") {
                     ForEach($editableDrawers) { $drawer in
@@ -74,6 +164,7 @@ struct SettingsView: View {
                         store.updateDrawers(editableDrawers)
                     }
                 }
+                .disabled(!store.canCurrentUserEditContent)
 
                 Section("Food mappings") {
                     TextField("Keyword (e.g. spag bol)", text: $newKeyword)
@@ -115,6 +206,7 @@ struct SettingsView: View {
                         }
                     }
                 }
+                .disabled(!store.canCurrentUserEditContent)
             }
             .navigationTitle("Settings")
             .freezerScreenStyle()
@@ -132,6 +224,8 @@ struct SettingsView: View {
     private func reloadState() {
         editableCategories = store.categories
         editableDrawers = store.drawers
+        householdName = store.householdName
+        selectedCurrentUserID = store.currentUser.id
 
         let validCategoryIDs = Set(editableCategories.map(\.id))
         if let selected = newMappingCategoryID, !validCategoryIDs.contains(selected) {
