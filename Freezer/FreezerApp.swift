@@ -1,12 +1,21 @@
 import SwiftUI
 import AppIntents
+import UIKit
 
 @main
 struct FreezerApp: App {
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var store = FreezerStore()
+    @UIApplicationDelegateAdaptor(CloudKitSyncAppDelegate.self) private var appDelegate
+    @StateObject private var store: FreezerStore
 
     init() {
+        _store = StateObject(
+            wrappedValue: FreezerStore(
+                repository: AppConfiguration.repository(),
+                sharingService: AppConfiguration.sharingService()
+            )
+        )
+
         let appearance = UINavigationBarAppearance()
         appearance.configureWithTransparentBackground()
         appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
@@ -21,10 +30,23 @@ struct FreezerApp: App {
             RootView()
                 .environmentObject(store)
                 .tint(AppTheme.tint)
+                .onOpenURL { url in
+                    Task {
+                        await store.acceptIncomingShareURL(url)
+                    }
+                }
                 .task {
                     await store.requestNotificationPermission()
                     store.refreshNotifications()
+                    store.configureCloudSyncIfNeeded()
+                    if AppConfiguration.cloudSharingEnabled {
+                        UIApplication.shared.registerForRemoteNotifications()
+                    }
                     FreezerShortcutsProvider.updateAppShortcutParameters()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .cloudKitRemoteChangeReceived)) { _ in
+                    store.reloadFromDiskIfChanged()
+                    store.refreshNotifications()
                 }
         }
         .onChange(of: scenePhase) { _, newPhase in

@@ -14,6 +14,9 @@ struct SettingsView: View {
     @State private var selectedCurrentUserID: UUID?
     @State private var newMemberName = ""
     @State private var newMemberRole: HouseholdRole = .editor
+    @State private var generatedShareURL: URL?
+    @State private var shareErrorMessage = ""
+    @State private var isGeneratingShare = false
 
     var body: some View {
         NavigationStack {
@@ -27,6 +30,35 @@ struct SettingsView: View {
                         reloadState()
                     }
                     .disabled(!store.canCurrentUserManageMembers || householdName.freezerNormalized.isEmpty)
+
+                    Button("Generate invite link") {
+                        Task {
+                            await generateShareURL()
+                        }
+                    }
+                    .disabled(!store.canCurrentUserManageMembers || isGeneratingShare)
+
+                    if isGeneratingShare {
+                        ProgressView("Generating link...")
+                            .foregroundStyle(AppTheme.itemText)
+                    }
+
+                    Text("Cloud sharing \(AppConfiguration.cloudSharingEnabled ? "enabled" : "disabled") for this build")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.itemText)
+
+                    if let generatedShareURL {
+                        ShareLink(item: generatedShareURL) {
+                            Label("Share invite link", systemImage: "square.and.arrow.up")
+                        }
+                        .tint(AppTheme.itemText)
+                    }
+
+                    if !shareErrorMessage.isEmpty {
+                        Text(shareErrorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
 
                     Picker(selection: Binding(
                         get: { selectedCurrentUserID ?? store.currentUser.id },
@@ -258,6 +290,20 @@ struct SettingsView: View {
             newMappingCategoryID = editableCategories.first?.id
         } else if newMappingCategoryID == nil {
             newMappingCategoryID = editableCategories.first?.id
+        }
+    }
+
+    @MainActor
+    private func generateShareURL() async {
+        isGeneratingShare = true
+        shareErrorMessage = ""
+        defer { isGeneratingShare = false }
+
+        do {
+            generatedShareURL = try await store.createShareURL()
+        } catch {
+            generatedShareURL = nil
+            shareErrorMessage = error.localizedDescription
         }
     }
 }

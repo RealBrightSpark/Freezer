@@ -5,21 +5,27 @@ import UserNotifications
 @MainActor
 final class FreezerStore: ObservableObject {
     @Published private(set) var data: FreezerData
+    @Published var collaborationAlert: CollaborationAlert?
 
-    private let saveURL: URL
+    private let repository: any FreezerRepository
+    private let sharingService: any FreezerSharingService
     private let notificationIdentifier = "freezer.overdue.summary"
 
-    init() {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        self.saveURL = documents.appendingPathComponent("freezer-data.json")
+    init(
+        repository: any FreezerRepository = FreezerRepositoryFactory.makeDefault(),
+        sharingService: any FreezerSharingService = DisabledFreezerSharingService()
+    ) {
+        self.repository = repository
+        self.sharingService = sharingService
 
-        if let loaded = Self.loadFromDisk(url: saveURL) {
+        if let loaded = (try? repository.load()) ?? nil {
             self.data = loaded
+            syncFromRemoteIfAvailable()
             migrateMultiUserDefaultsIfNeeded()
         } else {
             self.data = FreezerData.initial()
             save()
+            syncFromRemoteIfAvailable()
         }
     }
 
@@ -100,6 +106,12 @@ final class FreezerStore: ObservableObject {
         let dialog: String
     }
 
+    struct CollaborationAlert: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
+    }
+
     private var currentRole: HouseholdRole {
         data.household.members.first(where: { $0.userID == data.currentUserID })?.role ?? .viewer
     }
@@ -176,6 +188,30 @@ final class FreezerStore: ObservableObject {
 
         ensureAtLeastOneOwner()
         save()
+    }
+
+    func createShareURL() async throws -> URL {
+        try await sharingService.createOrFetchShareURL(
+            householdID: data.household.id,
+            householdName: data.household.name
+        )
+    }
+
+    func acceptIncomingShareURL(_ url: URL) async {
+        do {
+            let accepted = try await sharingService.acceptShare(from: url)
+            CloudKitShareContext.acceptedRootRecordName = accepted.rootRecordName
+            reloadFromDiskIfChanged()
+            collaborationAlert = CollaborationAlert(
+                title: "Share Joined",
+                message: "Invite accepted (\(accepted.rootRecordName))."
+            )
+        } catch {
+            collaborationAlert = CollaborationAlert(
+                title: "Share Invite Failed",
+                message: error.localizedDescription
+            )
+        }
     }
 
     func completeOnboarding(drawers: [DrawerDraft], thresholdMonths: Int) {
@@ -497,9 +533,18 @@ final class FreezerStore: ObservableObject {
     }
 
     func reloadFromDiskIfChanged() {
-        guard let loaded = Self.loadFromDisk(url: saveURL) else { return }
+        syncFromRemoteIfAvailable()
+        guard let loaded = (try? repository.load()) ?? nil else { return }
         data = loaded
         migrateMultiUserDefaultsIfNeeded()
+    }
+
+    func configureCloudSyncIfNeeded() {
+        do {
+            try repository.ensureSubscriptions()
+        } catch {
+            // Keep app functional if cloud subscriptions fail.
+        }
     }
 
     func refreshNotifications() {
@@ -525,16 +570,8 @@ final class FreezerStore: ObservableObject {
         center.add(request)
     }
 
-    private nonisolated static func loadFromDisk(url: URL) -> FreezerData? {
-        guard let raw = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(FreezerData.self, from: raw)
-    }
-
     nonisolated static func intentSnapshot() -> FreezerData {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        let url = documents.appendingPathComponent("freezer-data.json")
-        return loadFromDisk(url: url) ?? FreezerData.initial()
+        LocalJSONFreezerRepository().loadSnapshot() ?? FreezerData.initial()
     }
 
     private func saveAndRefreshNotifications() {
@@ -542,10 +579,17 @@ final class FreezerStore: ObservableObject {
         refreshNotifications()
     }
 
+    private func syncFromRemoteIfAvailable() {
+        do {
+            try repository.syncFromRemote()
+        } catch {
+            // Keep local cache when cloud sync is unavailable.
+        }
+    }
+
     private func save() {
         do {
-            let encoded = try JSONEncoder().encode(data)
-            try encoded.write(to: saveURL, options: [.atomic])
+            try repository.save(data)
         } catch {
             print("Failed to save freezer data: \(error)")
         }

@@ -259,6 +259,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = MyFreezer;
 				INFOPLIST_KEY_CFBundleName = MyFreezer;
 				INFOPLIST_KEY_CFBundleSpokenName = "My Freezer";
+				INFOPLIST_KEY_FREEZER_CLOUD_SHARING_ENABLED = NO;
 				INFOPLIST_KEY_NSSiriUsageDescription = "Allow Siri to run freezer shortcuts by voice.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -295,6 +296,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = MyFreezer;
 				INFOPLIST_KEY_CFBundleName = MyFreezer;
 				INFOPLIST_KEY_CFBundleSpokenName = "My Freezer";
+				INFOPLIST_KEY_FREEZER_CLOUD_SHARING_ENABLED = NO;
 				INFOPLIST_KEY_NSSiriUsageDescription = "Allow Siri to run freezer shortcuts by voice.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
