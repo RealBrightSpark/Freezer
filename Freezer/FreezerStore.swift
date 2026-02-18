@@ -88,6 +88,18 @@ final class FreezerStore: ObservableObject {
         case expired
     }
 
+    enum SiriRemovalStatus: Sendable {
+        case removed
+        case notFound
+        case ambiguous
+        case forbidden
+    }
+
+    struct SiriRemovalResponse: Sendable {
+        let status: SiriRemovalStatus
+        let dialog: String
+    }
+
     private var currentRole: HouseholdRole {
         data.household.members.first(where: { $0.userID == data.currentUserID })?.role ?? .viewer
     }
@@ -378,32 +390,70 @@ final class FreezerStore: ObservableObject {
         data.drawers.first(where: { $0.id == id })?.name ?? "Unknown"
     }
 
-    func drawerNumber(for id: UUID) -> Int? {
-        guard let order = data.drawers.first(where: { $0.id == id })?.order else {
-            return nil
-        }
-        return order + 1
-    }
-
     func items(for drawerID: UUID) -> [FreezerItem] {
         items.filter { $0.drawerID == drawerID }
     }
 
-    func voiceRemovalMatches(itemTerm: String, drawerNumber requestedDrawerNumber: Int?) -> [FreezerItem] {
-        let normalized = itemTerm.freezerNormalized
-        guard !normalized.isEmpty else { return [] }
+    func removeItemForSiri(itemTerm: String, drawerName requestedDrawerName: String?) -> SiriRemovalResponse {
+        guard canCurrentUserEditContent else {
+            return SiriRemovalResponse(
+                status: .forbidden,
+                dialog: "You do not have permission to remove freezer items."
+            )
+        }
+
+        let trimmedTerm = itemTerm.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedTerm = trimmedTerm.freezerNormalized
+        guard !normalizedTerm.isEmpty else {
+            return SiriRemovalResponse(
+                status: .notFound,
+                dialog: "I could not find that item in your freezer."
+            )
+        }
 
         var matches = items.filter { item in
-            item.normalizedName == normalized ||
-            item.normalizedName.contains(normalized) ||
-            normalized.contains(item.normalizedName)
+            item.normalizedName == normalizedTerm ||
+            item.normalizedName.contains(normalizedTerm) ||
+            normalizedTerm.contains(item.normalizedName)
         }
 
-        if let requestedDrawerNumber {
-            matches = matches.filter { drawerNumber(for: $0.drawerID) == requestedDrawerNumber }
+        if let requestedDrawerName, !requestedDrawerName.freezerNormalized.isEmpty {
+            let normalizedDrawer = requestedDrawerName.freezerNormalized
+            matches = matches.filter { self.drawerName(for: $0.drawerID).freezerNormalized == normalizedDrawer }
         }
 
-        return matches.sorted { $0.dateAdded < $1.dateAdded }
+        matches = matches.sorted { $0.dateAdded < $1.dateAdded }
+
+        guard !matches.isEmpty else {
+            return SiriRemovalResponse(
+                status: .notFound,
+                dialog: "I could not find \(trimmedTerm) in your freezer."
+            )
+        }
+
+        if matches.count > 1 {
+            let drawers = Array(Set(matches.map { drawerName(for: $0.drawerID) })).sorted()
+            let drawerList = drawers.joined(separator: ", ")
+            return SiriRemovalResponse(
+                status: .ambiguous,
+                dialog: "I found \(trimmedTerm) in \(drawerList). Please repeat with the drawer name."
+            )
+        }
+
+        guard let item = matches.first else {
+            return SiriRemovalResponse(
+                status: .notFound,
+                dialog: "I could not find \(trimmedTerm) in your freezer."
+            )
+        }
+
+        let drawer = drawerName(for: item.drawerID)
+        deleteItem(id: item.id)
+
+        return SiriRemovalResponse(
+            status: .removed,
+            dialog: "\(item.name) removed from \(drawer)."
+        )
     }
 
     func matchingItems(term: String) -> [FreezerItem] {
@@ -446,6 +496,12 @@ final class FreezerStore: ObservableObject {
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
     }
 
+    func reloadFromDiskIfChanged() {
+        guard let loaded = Self.loadFromDisk(url: saveURL) else { return }
+        data = loaded
+        migrateMultiUserDefaultsIfNeeded()
+    }
+
     func refreshNotifications() {
         let overdueCount = overdueItems().count
         let center = UNUserNotificationCenter.current()
@@ -469,9 +525,16 @@ final class FreezerStore: ObservableObject {
         center.add(request)
     }
 
-    private static func loadFromDisk(url: URL) -> FreezerData? {
+    private nonisolated static func loadFromDisk(url: URL) -> FreezerData? {
         guard let raw = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(FreezerData.self, from: raw)
+    }
+
+    nonisolated static func intentSnapshot() -> FreezerData {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let url = documents.appendingPathComponent("freezer-data.json")
+        return loadFromDisk(url: url) ?? FreezerData.initial()
     }
 
     private func saveAndRefreshNotifications() {

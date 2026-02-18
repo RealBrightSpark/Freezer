@@ -1,4 +1,5 @@
 import SwiftUI
+import AppIntents
 
 @main
 struct FreezerApp: App {
@@ -23,11 +24,14 @@ struct FreezerApp: App {
                 .task {
                     await store.requestNotificationPermission()
                     store.refreshNotifications()
+                    FreezerShortcutsProvider.updateAppShortcutParameters()
                 }
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
+                store.reloadFromDiskIfChanged()
                 store.refreshNotifications()
+                FreezerShortcutsProvider.updateAppShortcutParameters()
             }
         }
     }
