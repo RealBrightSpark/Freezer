@@ -66,6 +66,7 @@ struct FreezerScreenStyle: ViewModifier {
             .scrollContentBackground(.hidden)
             .listRowBackground(AppTheme.rowSurface)
             .background(AppTheme.background.ignoresSafeArea())
+         
     }
 }
 

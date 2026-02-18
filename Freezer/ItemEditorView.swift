@@ -13,14 +13,17 @@ struct ItemEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Item") {
+                Section {
                     TextField("Name", text: $item.name)
                     TextField("Quantity", text: $item.quantity)
                     DatePicker("Date added", selection: $item.dateAdded, displayedComponents: .date)
+                } header: {
+                    Text("Item")
+                        .foregroundStyle(.yellow)
                 }
                 .disabled(!store.canCurrentUserEditContent)
 
-                Section("Placement") {
+                Section {
                     Picker("Category", selection: $item.categoryID) {
                         ForEach(store.categories) { category in
                             Text(category.name).tag(category.id)
@@ -32,6 +35,9 @@ struct ItemEditorView: View {
                             Text(drawer.name).tag(drawer.id)
                         }
                     }
+                } header: {
+                    Text("Placement")
+                        .foregroundStyle(.yellow)
                 }
                 .disabled(!store.canCurrentUserEditContent)
             }

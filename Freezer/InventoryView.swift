@@ -9,8 +9,11 @@ struct InventoryView: View {
         NavigationStack {
             List {
                 if !store.overdueItems().isEmpty {
-                    Section("Overdue") {
+                    Section {
                         Toggle("Show only overdue items", isOn: $showOverdueOnly)
+                    } header: {
+                        Text("Overdue")
+                            .foregroundStyle(.yellow)
                     }
                 }
 
@@ -46,13 +49,16 @@ struct InventoryView: View {
                                         } label: {
                                             Label("Delete", systemImage: "trash")
                                         }
+                                        
                                     }
+                                     
                                 }
                                 .listRowBackground(store.expiryState(for: item).rowColor)
+                                
                             }
                         } header: {
                             Text(drawer.name)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.yellow)
                         }
                     }
                 }

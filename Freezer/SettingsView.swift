@@ -18,7 +18,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Collaboration") {
+                Section {
                     TextField("Household name", text: $householdName)
                         .disabled(!store.canCurrentUserManageMembers)
 
@@ -28,7 +28,7 @@ struct SettingsView: View {
                     }
                     .disabled(!store.canCurrentUserManageMembers || householdName.freezerNormalized.isEmpty)
 
-                    Picker("Current user", selection: Binding(
+                    Picker(selection: Binding(
                         get: { selectedCurrentUserID ?? store.currentUser.id },
                         set: { newID in
                             selectedCurrentUserID = newID
@@ -39,11 +39,14 @@ struct SettingsView: View {
                         ForEach(store.users) { user in
                             Text(user.displayName).tag(user.id)
                         }
+                    } label: {
+                        Text("Current user")
+                            .foregroundStyle(AppTheme.itemText)
                     }
 
                     Text("Current role: \(store.members.first(where: { $0.userID == store.currentUser.id })?.role.label ?? "Viewer")")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.itemText)
 
                     HStack {
                         TextField("Add member name", text: $newMemberName)
@@ -70,7 +73,7 @@ struct SettingsView: View {
                                 Text(store.userName(for: member.userID))
                                 Text(member.role.label)
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(AppTheme.itemText)
                             }
 
                             Spacer()
@@ -99,21 +102,29 @@ struct SettingsView: View {
                             }
                         }
                     }
+                } header: {
+                    Text("Collaboration")
+                        .foregroundStyle(.yellow)
                 }
 
-                Section("Freezer age threshold") {
+                Section {
                     Stepper(
-                        "\(store.thresholdMonths) month\(store.thresholdMonths == 1 ? "" : "s")",
                         value: Binding(
                             get: { store.thresholdMonths },
                             set: { store.setThresholdMonths($0) }
                         ),
                         in: 1...24
-                    )
+                    ) {
+                        Text("\(store.thresholdMonths) month\(store.thresholdMonths == 1 ? "" : "s")")
+                            .foregroundStyle(AppTheme.itemText)
+                    }
+                } header: {
+                    Text("Freezer age threshold")
+                        .foregroundStyle(.yellow)
                 }
                 .disabled(!store.canCurrentUserEditContent)
 
-                Section("Categories") {
+                Section {
                     ForEach(editableCategories.indices, id: \.self) { index in
                         HStack {
                             TextField("Category name", text: Binding(
@@ -144,17 +155,23 @@ struct SettingsView: View {
                         store.updateCategories(editableCategories)
                         reloadState()
                     }
+                } header: {
+                    Text("Categories")
+                        .foregroundStyle(.yellow)
                 }
                 .disabled(!store.canCurrentUserEditContent)
 
-                Section("Drawers") {
+                Section {
                     ForEach($editableDrawers) { $drawer in
                         VStack(alignment: .leading, spacing: 8) {
                             TextField("Drawer name", text: $drawer.name)
-                            Picker("Default category", selection: $drawer.defaultCategoryID) {
+                            Picker(selection: $drawer.defaultCategoryID) {
                                 ForEach(editableCategories) { category in
                                     Text(category.name).tag(category.id)
                                 }
+                            } label: {
+                                Text("Default category")
+                                    .foregroundStyle(AppTheme.itemText)
                             }
                         }
                         .padding(.vertical, 4)
@@ -163,19 +180,25 @@ struct SettingsView: View {
                     Button("Save drawer defaults") {
                         store.updateDrawers(editableDrawers)
                     }
+                } header: {
+                    Text("Drawers")
+                        .foregroundStyle(.yellow)
                 }
                 .disabled(!store.canCurrentUserEditContent)
 
-                Section("Food mappings") {
+                Section {
                     TextField("Keyword (e.g. spag bol)", text: $newKeyword)
 
-                    Picker("Category", selection: Binding(
+                    Picker(selection: Binding(
                         get: { newMappingCategoryID ?? editableCategories.first?.id },
                         set: { newMappingCategoryID = $0 }
                     )) {
                         ForEach(editableCategories) { category in
                             Text(category.name).tag(Optional(category.id))
                         }
+                    } label: {
+                        Text("Category")
+                            .foregroundStyle(AppTheme.itemText)
                     }
 
                     Button("Add mapping") {
@@ -188,7 +211,7 @@ struct SettingsView: View {
 
                     if store.mappings.isEmpty {
                         Text("No custom mappings yet")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.itemText)
                     } else {
                         ForEach(store.mappings) { mapping in
                             HStack {
@@ -205,6 +228,9 @@ struct SettingsView: View {
                             }
                         }
                     }
+                } header: {
+                    Text("Food mappings")
+                        .foregroundStyle(.yellow)
                 }
                 .disabled(!store.canCurrentUserEditContent)
             }

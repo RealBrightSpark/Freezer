@@ -9,19 +9,25 @@ struct QueryView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Search") {
+                Section {
                     TextField("What is in the freezer?", text: $query)
+                } header: {
+                    Text("Search")
+                        .foregroundStyle(.yellow)
                 }
 
                 if !query.freezerNormalized.isEmpty {
-                    Section("Summary") {
+                    Section {
                         Text("\(results.count) matching item\(results.count == 1 ? "" : "s")")
                         Text(totalSummary)
                             .foregroundStyle(.secondary)
+                    } header: {
+                        Text("Summary")
+                            .foregroundStyle(.yellow)
                     }
                 }
 
-                Section("Results") {
+                Section {
                     if results.isEmpty {
                         Text("No items found")
                             .foregroundStyle(.secondary)
@@ -56,6 +62,9 @@ struct QueryView: View {
                             .listRowBackground(store.expiryState(for: item).rowColor)
                         }
                     }
+                } header: {
+                    Text("Results")
+                        .foregroundStyle(.yellow)
                 }
             }
             .navigationTitle("Search")

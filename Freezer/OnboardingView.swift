@@ -10,14 +10,17 @@ struct OnboardingView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Freezer setup") {
+                Section {
                     Stepper("Number of drawers: \(drawerCount)", value: $drawerCount, in: 1...10)
                         .onChange(of: drawerCount) { _, _ in
                             syncDraftsWithDrawerCount()
                         }
+                } header: {
+                    Text("Freezer setup")
+                        .foregroundStyle(.yellow)
                 }
 
-                Section("Drawer defaults") {
+                Section {
                     ForEach($drafts) { $draft in
                         VStack(alignment: .leading, spacing: 8) {
                             TextField("Drawer name", text: $draft.name)
@@ -29,10 +32,16 @@ struct OnboardingView: View {
                         }
                         .padding(.vertical, 4)
                     }
+                } header: {
+                    Text("Drawer defaults")
+                        .foregroundStyle(.yellow)
                 }
 
-                Section("Reminder") {
+                Section {
                     Stepper("Alert after \(thresholdMonths) months", value: $thresholdMonths, in: 1...24)
+                } header: {
+                    Text("Reminder")
+                        .foregroundStyle(.yellow)
                 }
 
                 Section {

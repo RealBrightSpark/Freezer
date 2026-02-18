@@ -15,7 +15,7 @@ struct AddItemView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Item") {
+                Section {
                     TextField("Name (e.g. chicken)", text: $name)
                         .onChange(of: name) { _, newValue in
                             handleNameChange(newValue)
@@ -23,12 +23,18 @@ struct AddItemView: View {
 
                     TextField("Quantity (e.g. 3 pieces)", text: $quantity)
 
-                    DatePicker("Date added", selection: $dateAdded, displayedComponents: .date)
+                    DatePicker(selection: $dateAdded, displayedComponents: .date) {
+                        Text("Date added")
+                            .foregroundStyle(AppTheme.itemText)
+                    }
+                } header: {
+                    Text("Item")
+                        .foregroundStyle(.yellow)
                 }
                 .disabled(!store.canCurrentUserEditContent)
 
-                Section("Auto assignment") {
-                    Picker("Category", selection: Binding(
+                Section {
+                    Picker(selection: Binding(
                         get: { selectedCategoryID ?? store.categories.first?.id },
                         set: { newID in
                             selectedCategoryID = newID
@@ -41,9 +47,12 @@ struct AddItemView: View {
                         ForEach(store.categories) { category in
                             Text(category.name).tag(Optional(category.id))
                         }
+                    } label: {
+                        Text("Category")
+                            .foregroundStyle(AppTheme.itemText)
                     }
 
-                    Picker("Drawer", selection: Binding(
+                    Picker(selection: Binding(
                         get: { selectedDrawerID ?? store.drawers.first?.id },
                         set: { newID in
                             selectedDrawerID = newID
@@ -53,7 +62,13 @@ struct AddItemView: View {
                         ForEach(store.drawers) { drawer in
                             Text(drawer.name).tag(Optional(drawer.id))
                         }
+                    } label: {
+                        Text("Drawer")
+                            .foregroundStyle(AppTheme.itemText)
                     }
+                } header: {
+                    Text("Auto assignment")
+                        .foregroundStyle(.yellow)
                 }
                 .disabled(!store.canCurrentUserEditContent)
 
@@ -73,6 +88,7 @@ struct AddItemView: View {
             }
             .navigationTitle("Add item")
             .freezerScreenStyle()
+            
             .onAppear {
                 bootstrapSelections()
             }
